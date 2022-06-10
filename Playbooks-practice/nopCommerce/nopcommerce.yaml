@@ -1,0 +1,123 @@
+---
+  - name: Install NopCommerce
+    become: yes
+    hosts: nopcommerce
+    tasks:
+      - name: apt-get update
+        apt:
+          update_cache: yes
+      - name: Download Microsft Package
+        get_url:
+          url: https://packages.microsoft.com/config/ubuntu/20.04/packages-microsoft-prod.deb
+          dest: .
+      - name: Insatalling Microsoft package
+        dpkg_selections:
+          name: packages-microsoft-prod.deb
+          selection: install
+      - name: Download ubuntu dependencies
+        get_url:
+          url: http://archive.ubuntu.com/ubuntu/pool/main/o/openssl1.0/libssl1.0.0_1.0.2n-1ubuntu5.8_amd64.deb
+          dest: .
+      - name: Insatalling ubuntu dependencies
+        dpkg_selections:
+          name: libssl1.0.0_1.0.2n-1ubuntu5.8_amd64.deb
+          selection: install          
+      - name: apt-get update
+        apt:
+          update_cache: yes
+      - name: install .net core runtimes
+        apt:
+          name: "{{ item }}"
+          update_cache: yes
+          state: present
+        with_items:
+          - apt-transport-https
+          - aspnetcore-runtime-6.0
+      - name: Install mysql-server
+        apt:
+          name: mysql-server
+          update_cache: yes
+      - name: Install nginx
+        apt:
+          name: nginx
+          update_cache: yes
+      - name: Start nginx Service
+        systemd:
+          name: nginx
+          state: started
+      - name: Give insecure permissions to an existing file
+        file:
+          path: /etc/nginx/sites-available/default
+          owner: root
+          group: root
+          mode: '1777'
+      - name: Starting nginx service
+        systemd:
+          name: nginx
+          state: started
+      - name: changing server configuration
+        ansible.builtin.template:
+          src: ./nginx_config.j2
+          dest: /etc/nginx/sites-available/default
+      - name: Create a directory
+        file:
+          path: /var/www/nopCommerce450
+          state: directory
+          mode: 1777
+      - name: Download NopCommerce application from github
+        get_url:
+          url: "https://github.com/nopSolutions/nopCommerce/releases/download/release-4.50.2/nopCommerce_4.50.2_NoSource_linux_x64.zip"
+          dest: /var/www/nopCommerce450
+      - name: Install unzipper
+        apt:
+          name: unzip
+          update_cache: yes
+      - name: Unzip the NopCommerce application
+        ansible.builtin.unarchive:
+          src: "/var/www/nopCommerce450/nopCommerce_4.50.2_NoSource_linux_x64.zip"
+          dest: /var/www/nopCommerce450
+          remote_src: yes
+      - name: Create bin directory
+        file:
+          path: /var/www/nopCommerce450/bin
+          state: directory
+          owner: root
+          group: root
+          mode: 1777
+      - name: Create logs directory
+        file:
+          path: /var/www/nopCommerce450/logs
+          state: directory
+          owner: root
+          group: root
+          mode: 1777
+      - name: Change nopCommerce folder permission
+        file:
+          path: /var/www/nopCommerce450
+          state: directory
+          owner: www-data
+          group: www-data
+          recurse: yes
+          mode: 1777
+      - name: Change nop service file
+        file:
+          path: /etc/systemd/system/nopCommerce450.service
+          state: touch
+          mode: 1777
+      - name: changing service configuration
+        copy:
+          src: ./nopCommerce450service.j2
+          dest: /etc/systemd/system/nopCommerce450.service
+        notify:
+          - Starting nopCommerce service
+          - Starting nginx service
+      - name: Starting nopCommerce service
+        systemd:
+          name: nopCommerce450.service
+          state: started
+          daemon_reload: yes
+      - name: Starting nginx service
+        systemd:
+          name: nginx
+          state: restarted
+          daemon_reload: yes
